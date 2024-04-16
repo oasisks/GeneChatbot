@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 import requests
 import pprint
 import re
+import time
 
 
 def _gene_parser(gene_html):
@@ -46,21 +47,23 @@ def _gene_parser(gene_html):
     return result
 
 
-def get_gene_data(gene_name: str):
+def get_gene_data(gene_name: str, limit: int = 10):
     """
     Given the gene_name, it will return the summary of the gene
     :param gene_name: the name of the gene symbol
+    :param limit: the total amount of entries we want
     :return:
     """
     url = f"https://www.ncbi.nlm.nih.gov/gene/?term={' '.join(gene_name.split())}"
     gene_id_url = "https://www.ncbi.nlm.nih.gov/gene/"
     response = requests.get(url)
+
     soup = BeautifulSoup(response.text, features="html.parser")
     gene_name_ids = soup.findAll("td", {"class": "gene-name-id"})
 
     genes = {}
-
-    for gene_name_id in gene_name_ids:
+    maximal_length = min(len(gene_name_ids), limit)
+    for gene_name_id in gene_name_ids[: maximal_length]:
         gene_id = gene_name_id.find("span", {"class": "gene-id"}).contents[0].strip("ID: ")
         result = _gene_parser(gene_id_url + gene_id)
         genes[gene_id] = result
@@ -75,7 +78,7 @@ def get_disease_paper(gene_name: str):
     :param gene_name:
     :return:
     """
-    pass
+    return ""
 
 
 if __name__ == '__main__':

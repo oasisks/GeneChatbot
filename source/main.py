@@ -31,14 +31,34 @@ def chat_completion_request(messages, tools=None, tool_choice=None, model=GPT_MO
 
 def execute_function_call(message: ChatCompletionMessage):
     message_function = message.tool_calls[0].function
+    messages = [{"role": "system", "content": "You are an expert in Parkinson Disease, and can explain in detail base "
+                                              "off genetic data"}]
     if message_function.name == "get_gene_data":
         gene_name = json.loads(message_function.arguments)["gene_name"]
-        return get_gene_data(gene_name)
+        info = get_gene_data(gene_name, limit=1)
+        messages.append(({"role": "user", "content": f"Can you give a detailed summary of the following json without "
+                                                     f"mentioning json: {json.dumps(info)}"}))
+        chat_response = chat_completion_request(
+            messages
+        )
+        assistant_message = chat_response.choices[0].message
+        return assistant_message.content
     elif message.tool_calls[0].function.name == "get_parkinson_disease_information":
         gene_name = json.loads(message_function.arguments)["gene_name"]
+        print("I am here")
         return get_disease_paper(gene_name)
     elif message_function.name == "get_gene_lists":
-        print("I asked for a list of gene lists")
+        info = get_gene_data("Parkinson Disease")
+        messages.append({"role": "user", "content": f"From the following data, list all of the gene name and a "
+                                                    f"summary of"
+                                                    f"its functions."
+                                                    f"{json.dumps(info)}"})
+        chat_response = chat_completion_request(
+            messages
+        )
+
+        assistant_message = chat_response.choices[0].message
+        return assistant_message.content
 
 
 def main():
@@ -108,9 +128,10 @@ def main():
             messages.append({"role": assistant_message.role, "content": assistant_message.content})
             pprint.pprint(assistant_message.content)
         else:
-            results = execute_function_call(assistant_message)
+            result = execute_function_call(assistant_message)
             # we want chatgpt to synthesize the information
-            messages.append({"role": "assistant", "content": results})
+            pprint.pprint(result)
+            messages.append({"role": "assistant", "content": result})
 
 
 if __name__ == '__main__':
