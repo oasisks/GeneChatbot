@@ -1,0 +1,1 @@
+ChatCompletionMessage(content=None, role='assistant', function_call=None, tool_calls=[ChatCompletionMessageToolCall(id='call_mIscVboWAmDXVNp7aiIQp1qc', function=Function(arguments='{\n  "gene_name": "PRKN"\n}', name='get_parkinson_disease_information'), type='function')])
