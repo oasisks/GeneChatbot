@@ -1,6 +1,7 @@
 import Bio.Entrez.Parser
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+from pymongo.mongo_client import MongoClient
 import os
 from Bio import Entrez
 import json
@@ -9,24 +10,29 @@ import pprint
 
 load_dotenv()
 NCBI_KEY = os.getenv("NCBI_API_KEY")
+MONGO_API_KEY = os.getenv("MONGO_API_KEY")
 Entrez.email = "something@something.com"
 Entrez.api_key = NCBI_KEY
+uri = os.getenv("MONGO_URI")
 
 
-def get_ncbi_gene_id(ensemble_id: str):
+def get_ncbi_gene_id(ensemble_id: str, name: str):
     """
     Returns the gene_id in the NCBI website
 
     If there are multiple IDs, then it will return the first ID
     :param ensemble_id: the universal id of the gene
-    :return: the id in NCBI
+    :param name: the name associated with the ensemble_id
+    :return: a list of ids
     """
     handle = Entrez.esearch(db="gene", term=ensemble_id)
     record = Entrez.read(handle)
     handle.close()
     ids = record["IdList"]
-    assert len(ids) == 1, "more than one gene id was found"
-    return record["IdList"][0]
+    handle = Entrez.esearch(db="gene", term=name)
+    handle.close()
+    ids = record["IdList"]
+    return ids
 
 
 def get_ncbi_gene_data(gene_id: Bio.Entrez.Parser.StringElement):
@@ -93,7 +99,7 @@ def ncbi_gene_parser(markdown: bytes):
             "symbol": official_symbol if official_symbol is None else official_symbol.text,
             "official_name": official_full_name if official_full_name is None else official_full_name.text
         },
-        "similar_names": similar_names,
+        "similar_names": None if not similar_names else similar_names,
         "summary": summary if summary is None else summary.text,
         "gene_type": gene_type if gene_type is None else gene_type["value"],
         "gene_rifs": gene_rifs if gene_rifs is None else title_to_id
@@ -103,15 +109,33 @@ def ncbi_gene_parser(markdown: bytes):
 def main():
     file = open("../Data/biomart_ensembl2gene.json")
     document = json.load(file)
-    markdown = get_ncbi_gene_data("5071")
-    data = ncbi_gene_parser(markdown)
-    pprint.pprint(data)
-    # for ensemble_id, name in tqdm(document.items(), total=len(document)):
-    #     gene_id = get_ncbi_gene_id(ensemble_id)
-    #     markdown = get_ncbi_gene_data(gene_id)
-    #     data = ncbi_gene_parser(markdown)
-    #     print(data)
-    #     break
+    file.close()
+    mongo_client = MongoClient(uri)
+
+    try:
+        mongo_client.admin.command('ping')
+        print("Pinged your deployment. You successfully connected to MongoDB!")
+    except Exception as e:
+        print(e)
+    gene_db = mongo_client["gene_db"]
+    raw_data = gene_db["raw"]
+    ids = set()
+    get_ncbi_gene_id("dasd", "5.8S-rRNA")
+    for ensemble_id, name in document.items():
+        # count = raw_data.find({"_id": ensemble_id}).collection.count_documents({})
+        # if count > 0:
+        #     continue
+        # gene_id = get_ncbi_gene_id(ensemble_id, name)
+        # if there are no gene ids or the id is already queried, we continue
+        pass
+        # if not len(gene_id) > 0 or gene_id[0] in ids:
+        #     continue
+        #
+        # markdown = get_ncbi_gene_data(gene_id[0])
+        # data = ncbi_gene_parser(markdown)
+        # data["_id"] = ensemble_id
+        # response = raw_data.insert_one(data)
+        # ids.add(gene_id[0])
 
 
 if __name__ == '__main__':
