@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from openai import OpenAI
+from dotenv import load_dotenv
 import torch
 import json
 import matplotlib.pyplot as plt
