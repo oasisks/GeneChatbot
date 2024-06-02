@@ -1,11 +1,11 @@
 import Bio.Entrez.Parser
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
-from pymongo.mongo_client import MongoClient
 import os
 from Bio import Entrez
 import json
 from tqdm import tqdm
+from db import mongo_client
 
 load_dotenv()
 
@@ -108,13 +108,7 @@ def main():
     file = open("../Data/biomart_ensembl2gene.json")
     document = json.load(file)
     file.close()
-    mongo_client = MongoClient(uri)
 
-    try:
-        mongo_client.admin.command('ping')
-        print("Pinged your deployment. You successfully connected to MongoDB!")
-    except Exception as e:
-        print(e)
     gene_db = mongo_client["gene_db"]
     raw_data = gene_db["raw"]
     missing_genes = gene_db["missing"]
@@ -172,7 +166,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    # api_key, email = API_EMAIL_PAIRS[0]
-    # Entrez.api_key = api_key
-    # Entrez.email = email
-    # print(get_ncbi_gene_id("ENSG00000278294"))
