@@ -6,30 +6,28 @@ import os
 from Bio import Entrez
 import json
 from tqdm import tqdm
-import pprint
 
 load_dotenv()
-NCBI_KEY = os.getenv("NCBI_API_KEY")
-MONGO_API_KEY = os.getenv("MONGO_API_KEY")
-Entrez.email = "something@something.com"
-Entrez.api_key = NCBI_KEY
+
+API_EMAIL_PAIRS = [
+    (os.getenv(f"NCBI_API_KEY{i}"), os.getenv(f"NCBI_EMAIL_{i}")) for i in range(1, 6)
+]
+
+# Entrez.email = "something@something.com"
+# Entrez.api_key = NCBI_KEY
 uri = os.getenv("MONGO_URI")
 
 
-def get_ncbi_gene_id(ensemble_id: str, name: str):
+def get_ncbi_gene_id(ensemble_id: str):
     """
     Returns the gene_id in the NCBI website
 
     If there are multiple IDs, then it will return the first ID
     :param ensemble_id: the universal id of the gene
-    :param name: the name associated with the ensemble_id
     :return: a list of ids
     """
     handle = Entrez.esearch(db="gene", term=ensemble_id)
     record = Entrez.read(handle)
-    handle.close()
-    ids = record["IdList"]
-    handle = Entrez.esearch(db="gene", term=name)
     handle.close()
     ids = record["IdList"]
     return ids
@@ -37,7 +35,7 @@ def get_ncbi_gene_id(ensemble_id: str, name: str):
 
 def get_ncbi_gene_data(gene_id: Bio.Entrez.Parser.StringElement):
     """
-    Grabs all the information on the NCBI website given the NCBI Gene Id
+    Grabs all the information on the NCBI website given the NCBI Gene ID
     :param gene_id: the id of the gene
     :return:
     """
@@ -119,25 +117,62 @@ def main():
         print(e)
     gene_db = mongo_client["gene_db"]
     raw_data = gene_db["raw"]
+    missing_genes = gene_db["missing"]
     ids = set()
-    get_ncbi_gene_id("dasd", "5.8S-rRNA")
-    for ensemble_id, name in document.items():
-        # count = raw_data.find({"_id": ensemble_id}).collection.count_documents({})
-        # if count > 0:
-        #     continue
-        # gene_id = get_ncbi_gene_id(ensemble_id, name)
-        # if there are no gene ids or the id is already queried, we continue
-        pass
-        # if not len(gene_id) > 0 or gene_id[0] in ids:
-        #     continue
-        #
-        # markdown = get_ncbi_gene_data(gene_id[0])
-        # data = ncbi_gene_parser(markdown)
-        # data["_id"] = ensemble_id
-        # response = raw_data.insert_one(data)
-        # ids.add(gene_id[0])
+    i = 0
+    total_pairs = len(API_EMAIL_PAIRS)
+    for ensemble_id, name in tqdm(document.items(), miniters=300, maxinterval=float("inf")):
+        count = raw_data.count_documents({"_id": ensemble_id}) # for things in the raw data
+        if count > 0:
+            continue
+
+        missing_count = missing_genes.count_documents({"_id": ensemble_id})
+        if missing_count > 0:
+            continue
+
+        # this will cycle through all the emails
+        api_key, email = API_EMAIL_PAIRS[i % total_pairs]
+        Entrez.api_key = api_key
+        Entrez.email = email
+
+        gene_ids = get_ncbi_gene_id(ensemble_id)
+        i += 1
+        if not len(gene_ids) > 0:
+            count = missing_genes.count_documents({"_id": ensemble_id})
+            response = missing_genes.insert_one({"_id": ensemble_id}) if count == 0 else "Already exist"
+            continue
+
+        if gene_ids[0] in ids:
+            continue
+
+        # grab the markdown of the page
+        gene_id = gene_ids[0]
+        markdown = None
+
+        try:
+            # if this doesn't work, we will continue until it does work
+            markdown = get_ncbi_gene_data(gene_id)
+        except Exception as e:
+            is_error = True
+            while is_error:
+                try:
+                    markdown = get_ncbi_gene_data(gene_id)
+                    is_error = False
+                except Exception as e:
+                    pass
+
+        # parse the data
+        data = ncbi_gene_parser(markdown)
+        data["_id"] = ensemble_id
+
+        # update it in db
+        response = raw_data.insert_one(data)
+        ids.add(gene_ids[0])
 
 
 if __name__ == '__main__':
     main()
-
+    # api_key, email = API_EMAIL_PAIRS[0]
+    # Entrez.api_key = api_key
+    # Entrez.email = email
+    # print(get_ncbi_gene_id("ENSG00000278294"))
